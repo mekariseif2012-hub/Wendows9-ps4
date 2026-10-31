@@ -1,0 +1,49 @@
+name: Build PS4 PKG
+on: [workflow_dispatch]
+env:
+  DOTNET_ROLL_FORWARD: Major
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y clang lld unzip
+      - name: Install libssl1.1
+        run: |
+          wget -q http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+      - name: Download OpenOrbis release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R OpenOrbis/OpenOrbis-PS4-Toolchain --pattern '*.tar.gz' --dir dl
+          mkdir oo
+          for t in dl/*.tar.gz; do tar -xzf "$t" -C oo; done
+          BIN=$(find oo -type d -path '*/bin/linux' | head -n1)
+          ROOT=$(realpath "$(dirname "$(dirname "$BIN")")")
+          chmod -R +x "$BIN"
+          echo "OO_PS4_TOOLCHAIN=$ROOT" >> "$GITHUB_ENV"
+      - name: Build Windows 9
+        run: |
+          mkdir -p build
+          cp -r "$OO_PS4_TOOLCHAIN/samples/SDL2" build/windows9
+          rm -rf build/windows9/SDL2
+          mkdir build/windows9/windows9
+          cp src/main.cpp build/windows9/windows9/main.cpp
+          cd build/windows9
+          sed -i 's/^TITLE .*/TITLE       := Windows 9 PS4 Pro Edition/' Makefile
+          sed -i 's/^TITLE_ID .*/TITLE_ID    := WNDW00001/' Makefile
+          sed -i 's/^CONTENT_ID .*/CONTENT_ID  := IV0000-WNDW00001_00-WINDOWS9PS400000/' Makefile
+          sed -i 's/^VERSION .*/VERSION     := 0.10/' Makefile
+          sed -i 's/^COMMONFILES .*/COMMONFILES :=/' Makefile
+          make
+          find . -name '*.pkg'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows9-pkg
+          path: build/windows9/*.pkg
+          if-no-files-found: error
