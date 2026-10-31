@@ -27,17 +27,23 @@ jobs:
           ROOT=$(realpath "$(dirname "$(dirname "$BIN")")")
           chmod -R +x "$BIN"
           echo "OO_PS4_TOOLCHAIN=$ROOT" >> "$GITHUB_ENV"
-      - name: Build SDL2 sample
+      - name: Build Windows 9
         run: |
-          cp -r "$OO_PS4_TOOLCHAIN/samples" .
-          echo "== samples =="
-          ls samples
-          D=$(ls samples | grep -i sdl | head -n1)
-          echo "building: $D"
-          cd "samples/$D" && make
-          find . -type f -name '*.pkg'
+          mkdir -p build
+          cp -r "$OO_PS4_TOOLCHAIN/samples/SDL2" build/windows9
+          rm -rf build/windows9/SDL2
+          mkdir build/windows9/windows9
+          cp src/main.cpp build/windows9/windows9/main.cpp
+          cd build/windows9
+          sed -i 's/^TITLE .*/TITLE       := Windows 9 PS4 Pro Edition/' Makefile
+          sed -i 's/^TITLE_ID .*/TITLE_ID    := WNDW00001/' Makefile
+          sed -i 's/^CONTENT_ID .*/CONTENT_ID  := IV0000-WNDW00001_00-WINDOWS9PS400000/' Makefile
+          sed -i 's/^VERSION .*/VERSION     := 0.10/' Makefile
+          sed -i 's/^COMMONFILES .*/COMMONFILES :=/' Makefile
+          make
+          find . -name '*.pkg'
       - uses: actions/upload-artifact@v4
         with:
-          name: ps4-pkg
-          path: samples/**/*.pkg
+          name: windows9-pkg
+          path: build/windows9/*.pkg
           if-no-files-found: error
