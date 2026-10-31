@@ -1,0 +1,43 @@
+name: Build PS4 PKG
+on: [workflow_dispatch]
+env:
+  DOTNET_ROLL_FORWARD: Major
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y clang lld unzip
+      - name: Install libssl1.1
+        run: |
+          wget -q http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+      - name: Download OpenOrbis release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R OpenOrbis/OpenOrbis-PS4-Toolchain --pattern '*.tar.gz' --dir dl
+          mkdir oo
+          for t in dl/*.tar.gz; do tar -xzf "$t" -C oo; done
+          BIN=$(find oo -type d -path '*/bin/linux' | head -n1)
+          ROOT=$(realpath "$(dirname "$(dirname "$BIN")")")
+          chmod -R +x "$BIN"
+          echo "OO_PS4_TOOLCHAIN=$ROOT" >> "$GITHUB_ENV"
+      - name: Build SDL2 sample
+        run: |
+          cp -r "$OO_PS4_TOOLCHAIN/samples" .
+          echo "== samples =="
+          ls samples
+          D=$(ls samples | grep -i sdl | head -n1)
+          echo "building: $D"
+          cd "samples/$D" && make
+          find . -type f -name '*.pkg'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ps4-pkg
+          path: samples/**/*.pkg
+          if-no-files-found: error
